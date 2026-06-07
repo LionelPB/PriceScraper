@@ -5,6 +5,7 @@ Price scraping utility for Amazon products.
 import time # For delays to avoid overloading servers and hanging the connection. 
 import requests # To fetch Amazon's product page. 
 from bs4 import BeautifulSoup # To extract price data from the request response. 
+from plyer import notification # Makes us able to send notifications to the user. 
 import os # To get environment variables for Amazon URL and price ceiling. 
 import sys # In case no URL is provided. 
 from playwright.sync_api import sync_playwright # To fetch the web page in case requests + bs4 were blocked. 
@@ -140,6 +141,19 @@ with sync_playwright() as p:
         # Remove any trailing dot. 
         if price.endswith("."):
             price = price[:-1]
-        print("Final price: %s" % (price))
+        price = float(price) # No price comparison errors. 
+        if price >= MAX_PRICE: 
+            log("Price still above ceiling. ")
+            print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
+        elif price < MAX_PRICE: 
+            log("Price below ceiling! ")
+            print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
+            print("**** PRICE BELOW CEILING! ****")
+            print("An email and a notification have been sent to you with all the details. ")
+            notification.notify(
+                title="AMAZON PRICE BELOW CEILING! ",
+                message="The current price of the product is $%s (your ceiling is of $%s). Check your email for more details. " % (price, MAX_PRICE),
+                timeout=60, # So the user really sees it. 
+            )
         # Wait for next update.
         time.sleep(INTERVAL)
