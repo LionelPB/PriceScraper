@@ -6,25 +6,52 @@ import time # For delays to avoid overloading servers and hanging the connection
 import requests # To fetch Amazon's product page. 
 from bs4 import BeautifulSoup # To extract price data from the request response. 
 from plyer import notification # Makes us able to send notifications to the user. 
+import agentmail
 import os # To get environment variables for Amazon URL and price ceiling. 
 import sys # In case no URL is provided. 
 from playwright.sync_api import sync_playwright # To fetch the web page in case requests + bs4 were blocked. 
 
 logs = []
 AMAZON_URL = ""
+EMAIL = "kosog20859@bncinema.com"
 AMAZON_OFFSCREEN = "a-offscreen" # ONLY FOR AMAZON: It is unlikely that this will work on other sites. 
 HEADLESS = True # If there's a ReCAPTCHA, set this to False so you see the browser and solve it. If there are no ReCAPTCHAs, 
 # you can set it to True to avoid opening a browser window. 
 MAX_PRICE = 0.0
 INTERVAL = 60 # Check every minute. 
 PRICE_CLASS = "a-price" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
+AGENTMAIL_APIKEY = "am_us_ed192731a8db328a5bd870ddbdd029ddb0fe949f2eb863403d17c35fc8542067" # API key for AgentMail. 
+
+with open("message_template.html", "r", encoding="utf-8") as template: 
+    BODY_TEMPLATE = template.read()
 
 def log(msg: str = "") -> None: 
     """Adds a log. Logs aren't saved to any file. """
     logs.append(msg) # But do not print them unless the environment variable DEBUG is set to "true".
     if os.environ.get("DEBUG", "false").lower() == "true":
         print(msg)
+def send_mail(price: float) -> None:
+    """Sends the email to the user. """    
+    log("Sending email with price: $%d" % (price))
+    print("Sending email...")
+    client = agentmail.AgentMail(api_key=AGENTMAIL_APIKEY)
 
+    body = BODY_TEMPLATE % (price)
+
+
+    try: 
+        response = client.inboxes.messages.send(
+            inbox_id="pricescraper@agentmail.to",
+            to=EMAIL, 
+            subject="AMAZON PRODUCT PRICE BELOW CEILING", 
+            html=body, 
+        )
+    except (Exception, BaseException, KeyboardInterrupt) as error: 
+        log("There was an error sending the email: %s" % (error))
+        print("An error occurred while sending email: %s" % (error))
+        # We won't exit, as the notification will show. 
+    else: 
+        print("Email successfully sent, reponse ID: %s. " % (response))
 try: 
     AMAZON_URL = os.environ["AMAZON_URL"]
     log("Amazon URL found in environment variable. ")
@@ -155,5 +182,6 @@ with sync_playwright() as p:
                 message="The current price of the product is $%s (your ceiling is of $%s). Check your email for more details. " % (price, MAX_PRICE),
                 timeout=60, # So the user really sees it. 
             )
+            send_mail(price)
         # Wait for next update.
         time.sleep(INTERVAL)
