@@ -2,6 +2,7 @@
 Price scraping utility for Amazon products.
 """
 # Use BeautifulSoup for HTML parsing and Requests for HTTP requests. 
+import time # For delays to avoid overloading servers and hanging the connection. 
 import requests # To fetch Amazon's product page. 
 from bs4 import BeautifulSoup # To extract price data from the request response. 
 import os # To get environment variables for Amazon URL and price ceiling. 
@@ -10,11 +11,15 @@ import sys # In case no URL is provided.
 logs = []
 AMAZON_URL = ""
 MAX_PRICE = 0.0
+INTERVAL = 4 # Check every minute. 
+PRICE_ID = "priceblock_ourprice" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
 
 def log(msg: str = "") -> None: 
     """Adds a log. Logs aren't saved. """
     logs.append(msg) # But do not print them unless the environment variable DEBUG is set to "true".
     if os.environ.get("DEBUG", "false").lower() == "true":
+        print(msg)
+    else: 
         print(msg)
 
 try: 
@@ -47,4 +52,24 @@ except:
             sys.exit(1)
     log("Price ceiling defined by user. ")
 # Now, we have both the product URL and the price ceiling. 
-INTERVAL = 60 # Check every minute. 
+while True:
+    try: 
+        log("Fetching for new price...")
+        req = requests.get(AMAZON_URL, 
+                        # Add fake user agents to avoid Amazon blocking the request.
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}) # This is an user agent for Chrome on Windows. 
+        if req.status_code != 200: 
+            raise Exception("Web page fetch failed: %d. " % (req.status_code))
+        # Do not need an "else" block, if there's a non 200 status code, the exception will be raised, and this code will never be able to run. 
+        content = req.content # Here's the HTML of the web page. 
+    except (Exception, BaseException, KeyboardInterrupt) as error: 
+        log("Unable to fetch new price: %s" % (error))
+        print("Could not fetch the product page. Make sure you gave a valid URL and that you've an internet connection. \n Details: %s" % (error))
+        sys.exit(1)
+    # Parse the HTML response and extract the current price. 
+    log("Successfully fetched the web page, extracting price...")
+
+
+
+    # Wait for next update.
+    time.sleep(INTERVAL)
