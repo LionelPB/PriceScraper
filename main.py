@@ -11,11 +11,12 @@ from playwright.sync_api import sync_playwright # To fetch the web page in case 
 
 logs = []
 AMAZON_URL = ""
-HEADLESS = False # If there's a ReCAPTCHA, set this to False so you see the browser and solve it. If there are no ReCAPTCHAs, 
+AMAZON_OFFSCREEN = "a-offscreen" # ONLY FOR AMAZON: It is unlikely that this will work on other sites. 
+HEADLESS = True # If there's a ReCAPTCHA, set this to False so you see the browser and solve it. If there are no ReCAPTCHAs, 
 # you can set it to True to avoid opening a browser window. 
 MAX_PRICE = 0.0
 INTERVAL = 60 # Check every minute. 
-PRICE_CLASS = "a-price-whole" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
+PRICE_CLASS = "a-price" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
 
 def log(msg: str = "") -> None: 
     """Adds a log. Logs aren't saved to any file. """
@@ -79,14 +80,19 @@ with sync_playwright() as p:
             soup = BeautifulSoup(content, "html.parser")
             price_element = soup.find(class_=PRICE_CLASS) # "class_" to avoid conflicts with the "class" keyword. 
             if price_element != None: 
-                price = price_element.get_text() # Get the current price. 
+                # Try to find the full price. 
+                offscreen = price_element.find(class_=AMAZON_OFFSCREEN)
+                if offscreen != None:
+                    price = offscreen.get_text()
+                else:
+                    price = price_element.get_text()
                 price = price.strip() # Only price is kept, in case there were any spaces or newlines (unlikely, but if not from Amazon, we don't know for sure).
                 log("Extracted price: %s. " % (price))
             else: 
                 raise Exception("Price element with class \"%s\" not found in the web page. If the page you're fetching is not from Amazon, update PRICE_CLASS accordingly. " % (PRICE_CLASS))
         except (Exception, BaseException, KeyboardInterrupt) as error: 
             log("Unable to extract price: %s" % (error))
-            print("Could not extract the price from the web page. Make sure the URL is correct. \n Details: %s" % (error))
+            print("Could not extract the price from the web page. Make sure the URL is correct. \n Details: %s\nDO NOT WORRY, the script is going to open Playwright and retry. " % (error))
             # sys.exit(1)
             # Try with Playwright now. 
             log("Using Playwright to fetch the web page...")
@@ -105,9 +111,13 @@ with sync_playwright() as p:
                 soup = BeautifulSoup(content, "html.parser")
                 price_element = soup.find(class_=PRICE_CLASS) # "class_" to avoid conflicts with the "class" keyword. 
                 if price_element != None: 
-                    price = price_element.get_text() # Get the current price. 
+                    # Try to find the full price. 
+                    offscreen = price_element.find(class_=AMAZON_OFFSCREEN)
+                    if offscreen != None:
+                        price = offscreen.get_text()
+                    else:
+                        price = price_element.get_text()
                     price = price.strip() # Only price is kept, in case there were any spaces or newlines (unlikely, but if not from Amazon, we don't know for sure).
-                    log("Extracted price with Playwright. " % (price))
                 else: 
                     raise Exception("Price element with class \"%s\" not found in the web page. If the page you're fetching is not from Amazon, update PRICE_CLASS accordingly. " % (PRICE_CLASS))
             except (Exception, BaseException, KeyboardInterrupt) as error:
@@ -118,6 +128,18 @@ with sync_playwright() as p:
                 # Close the browser even if everything succeeds, so it frees up RAM and CPU. 
                 browser.close()
         # Because we're still here, everything went well, and we've the price as as string. 
+        # Clean the price, its appearance depends on the country it is being fetched from.
+        price = price.replace("€", "").replace("$", "").replace(" ", "").strip() # Remove symbols and spaces. Handles both American and European formats. 
+        if "," in price and (len(price) - price.rfind(",") <= 3):
+            # European format (e. g. 1.186,03 or 186,03). 
+            price = price.replace(".", "").replace(",", ".")
+        else:
+            # American format (e. g. 1,186.03 or 186.03). 
+            price = price.replace(",", "")
+
+        # Remove any trailing dot. 
+        if price.endswith("."):
+            price = price[:-1]
         print("Final price: %s" % (price))
         # Wait for next update.
         time.sleep(INTERVAL)
