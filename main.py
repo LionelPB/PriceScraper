@@ -127,11 +127,6 @@ while True:
             # sys.exit(1)
             # Try with Playwright now. 
             log("Using Playwright to fetch the web page...")
-            if browser.is_connected() == False:
-                log("Browser not running, maybe closed because of an error. Relaunching...")
-                browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
-                page = browser.new_page()
-                log("Successfully restarted browser. ")
             page.goto(AMAZON_URL, wait_until="load")
             # Wait for 10 seconds for the price to be here, else there's a timeout and we exit. 
             page.wait_for_selector(f".{PRICE_CLASS}", timeout=10000)
