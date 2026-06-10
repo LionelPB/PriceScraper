@@ -18,7 +18,7 @@ AMAZON_OFFSCREEN = "a-offscreen" # ONLY FOR AMAZON: It is unlikely that this wil
 HEADLESS = True # If there's a ReCAPTCHA, set this to False so you see the browser and solve it. If there are no ReCAPTCHAs, 
 # you can set it to True to avoid opening a browser window. 
 MAX_PRICE = 0.0
-INTERVAL = 60 # Check every minute. 
+INTERVAL = 800 # Seconds to wait between each check. 
 PRICE_CLASS = "a-price" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
 AGENTMAIL_APIKEY = "am_us_ed192731a8db328a5bd870ddbdd029ddb0fe949f2eb863403d17c35fc8542067" # API key for AgentMail. 
 
@@ -36,7 +36,7 @@ def send_mail(price: float) -> None:
     print("Sending email...")
     client = agentmail.AgentMail(api_key=AGENTMAIL_APIKEY)
 
-    body = BODY_TEMPLATE % (price)
+    body = BODY_TEMPLATE % (price, MAX_PRICE, MAX_PRICE - price, AMAZON_URL)
 
 
     try: 
@@ -83,16 +83,19 @@ except:
     log("Price ceiling defined by user. ")
 # Now, we have both the product URL and the price ceiling. 
 # Launch Playwright but only use it in case the requests + bs4 method fails.
-with sync_playwright() as p:
-    log("Launching Google Chrome browser...")
-    browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
-    page = browser.new_page()
-    while True:
+while True:
+    with sync_playwright() as p:
+        log("Launching Google Chrome browser...")
+        browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
+        page = browser.new_page()
         try: 
             log("Fetching for new price...")
             req = requests.get(AMAZON_URL, 
                             # Add fake user agents to avoid Amazon blocking the request.
-                            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}) # This is an user agent for Chrome on Windows. 
+                            headers={
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", # This is an user agent for Chrome on Windows. 
+                                "Connection": "close",  # This ensures the connection closes to avoid making the script crash. 
+                                }) # This line sends the request. 
             if req.status_code != 200: 
                 raise Exception("Web page fetch failed: %d. " % (req.status_code))
             # Do not need an "else" block, if there's a non 200 status code, the exception will be raised, and this code will never be able to run. 
