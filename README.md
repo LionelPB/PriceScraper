@@ -12,9 +12,10 @@ to see the browser window. From then on, just complete the CAPTCHA to continue.
 + Once done, go to **[API keys](https://console.agentmail.to/dashboard/api-keys)** and click **Create API key**. 
 + In the dialog that will open, choose a name for your bot. **IMPORTANT**: In *Scope*, choose *No scope*. 
     - Once you create your API key, copy it and set the **AGENTMAIL_APIKEY** variable in *main.py* to the API key. *NOTE*: Once you close the dialog, you will not be able to see the API key again. 
-## TODOs: 
-+ Add GUI for simple use: 
-    - Runs `main.py` with environment variables defined by `gui.py` (the GUI)
-    - Enables the user to set the `INTERVAL` variable for customized refresh rate. 
-+ In `main.py`, try to use the `INTERVAL` environment variable instead of hardcoding
-    - This is relatively simple. 
+## TODOs
+
+- [x] Add GUI for simple use:
+    - [ ] Runs `main.py` with environment variables defined by `gui.py` (the GUI)
+    - [ ] Enables the user to set the `INTERVAL` variable for customized refresh rate.
+- [ ] In `main.py`, try to use the `INTERVAL` environment variable instead of hardcoding  
+    - [ ] This is relatively simple.

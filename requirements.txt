@@ -3,3 +3,4 @@ beautifulsoup4
 playwright
 plyer
 agentmail
+pillow
