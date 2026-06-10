@@ -52,87 +52,62 @@ def send_mail(price: float) -> None:
         # We won't exit, as the notification will show. 
     else: 
         print("Email successfully sent, reponse ID: %s. " % (response))
-try: 
-    AMAZON_URL = os.environ["AMAZON_URL"]
-    log("Amazon URL found in environment variable. ")
-except: 
-    log("Amazon URL not provided in environment variable. Retrieving from user input...")
-    AMAZON_URL = input("Enter the Amazon product URL: ")
-    if len(AMAZON_URL.strip()) == 0: 
-        print("No URL provided. Exiting.")
-        sys.exit(1)
-    log("Amazon URL successfully retrieved. ")
-# Now we've got the product URL to track. 
-# Next: Get the price ceiling from environment variable (if possible), else from user input.
-try: 
-    MAX_PRICE = os.environ["MAX_PRICE"]
-    MAX_PRICE = float(MAX_PRICE)
-    log("Price ceiling predefined in environment variable. ")
-except: 
-    log("Obtaining price ceiling from user...")
-    MAX_PRICE = input("Enter the maximum price you want to pay (ceiling price): ")
-    if len(MAX_PRICE.strip()) == 0: 
-        print("No price ceiling provided. Define it in the environment variable MAX_PRICE if you do not want to provide it now. ")
-        sys.exit(1)
-    else: 
-        try: 
-            MAX_PRICE = float(MAX_PRICE)
-        except:
-            print("You must give a valid number (e. g. 19.99 or only 19) for the price ceiling. ")
+def get_prices(): # To make "gui.py" easier. 
+    try: 
+        AMAZON_URL = os.environ["AMAZON_URL"]
+        log("Amazon URL found in environment variable. ")
+    except: 
+        log("Amazon URL not provided in environment variable. Retrieving from user input...")
+        AMAZON_URL = input("Enter the Amazon product URL: ")
+        if len(AMAZON_URL.strip()) == 0: 
+            print("No URL provided. Exiting.")
             sys.exit(1)
-    log("Price ceiling defined by user. ")
-# Now, we have both the product URL and the price ceiling. 
-# Launch Playwright but only use it in case the requests + bs4 method fails.
-while True:
-    with sync_playwright() as p:
-        log("Launching Google Chrome browser...")
-        browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
-        page = browser.new_page()
-        try: 
-            log("Fetching for new price...")
-            req = requests.get(AMAZON_URL, 
-                            # Add fake user agents to avoid Amazon blocking the request.
-                            headers={
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", # This is an user agent for Chrome on Windows. 
-                                "Connection": "close",  # This ensures the connection closes to avoid making the script crash. 
-                                }) # This line sends the request. 
-            if req.status_code != 200: 
-                raise Exception("Web page fetch failed: %d. " % (req.status_code))
-            # Do not need an "else" block, if there's a non 200 status code, the exception will be raised, and this code will never be able to run. 
-            content = req.content # Here's the HTML of the web page. 
-        except (Exception, BaseException, KeyboardInterrupt) as error: 
-            log("Unable to fetch new price: %s" % (error))
-            print("Could not fetch the product page. Make sure you gave a valid URL and that you've an internet connection. \n Details: %s" % (error))
+        log("Amazon URL successfully retrieved. ")
+    # Now we've got the product URL to track. 
+    # Next: Get the price ceiling from environment variable (if possible), else from user input.
+    try: 
+        MAX_PRICE = os.environ["MAX_PRICE"]
+        MAX_PRICE = float(MAX_PRICE)
+        log("Price ceiling predefined in environment variable. ")
+    except: 
+        log("Obtaining price ceiling from user...")
+        MAX_PRICE = input("Enter the maximum price you want to pay (ceiling price): ")
+        if len(MAX_PRICE.strip()) == 0: 
+            print("No price ceiling provided. Define it in the environment variable MAX_PRICE if you do not want to provide it now. ")
             sys.exit(1)
-        # Parse the HTML response and extract the current price. 
-        log("Successfully fetched the web page, extracting price...")
+        else: 
+            try: 
+                MAX_PRICE = float(MAX_PRICE)
+            except:
+                print("You must give a valid number (e. g. 19.99 or only 19) for the price ceiling. ")
+                sys.exit(1)
+        log("Price ceiling defined by user. ")
+    # Now, we have both the product URL and the price ceiling. 
+    # Launch Playwright but only use it in case the requests + bs4 method fails.
+    while True:
+        with sync_playwright() as p:
+            log("Launching Google Chrome browser...")
+            browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
+            page = browser.new_page()
+            try: 
+                log("Fetching for new price...")
+                req = requests.get(AMAZON_URL, 
+                                # Add fake user agents to avoid Amazon blocking the request.
+                                headers={
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", # This is an user agent for Chrome on Windows. 
+                                    "Connection": "close",  # This ensures the connection closes to avoid making the script crash. 
+                                    }) # This line sends the request. 
+                if req.status_code != 200: 
+                    raise Exception("Web page fetch failed: %d. " % (req.status_code))
+                # Do not need an "else" block, if there's a non 200 status code, the exception will be raised, and this code will never be able to run. 
+                content = req.content # Here's the HTML of the web page. 
+            except (Exception, BaseException, KeyboardInterrupt) as error: 
+                log("Unable to fetch new price: %s" % (error))
+                print("Could not fetch the product page. Make sure you gave a valid URL and that you've an internet connection. \n Details: %s" % (error))
+                sys.exit(1)
+            # Parse the HTML response and extract the current price. 
+            log("Successfully fetched the web page, extracting price...")
 
-        try: 
-            soup = BeautifulSoup(content, "html.parser")
-            price_element = soup.find(class_=PRICE_CLASS) # "class_" to avoid conflicts with the "class" keyword. 
-            if price_element != None: 
-                # Try to find the full price. 
-                offscreen = price_element.find(class_=AMAZON_OFFSCREEN)
-                if offscreen != None:
-                    price = offscreen.get_text()
-                else:
-                    price = price_element.get_text()
-                price = price.strip() # Only price is kept, in case there were any spaces or newlines (unlikely, but if not from Amazon, we don't know for sure).
-                log("Extracted price: %s. " % (price))
-            else: 
-                raise Exception("Price element with class \"%s\" not found in the web page. If the page you're fetching is not from Amazon, update PRICE_CLASS accordingly. " % (PRICE_CLASS))
-        except (Exception, BaseException, KeyboardInterrupt) as error: 
-            log("Unable to extract price: %s" % (error))
-            print("Could not extract the price from the web page. Make sure the URL is correct. \n Details: %s\nDO NOT WORRY, the script is going to open Playwright and retry. " % (error))
-            # sys.exit(1)
-            # Try with Playwright now. 
-            log("Using Playwright to fetch the web page...")
-            page.goto(AMAZON_URL, wait_until="load")
-            # Wait for 10 seconds for the price to be here, else there's a timeout and we exit. 
-            page.wait_for_selector(f".{PRICE_CLASS}", timeout=10000)
-            content = page.content() # You may not know this returns the HTML updated (by JavaScript) of the web page, 
-                                     #  not the raw original HTML. 
-            # OK, let's try to extract the price out of the HTML. 
             try: 
                 soup = BeautifulSoup(content, "html.parser")
                 price_element = soup.find(class_=PRICE_CLASS) # "class_" to avoid conflicts with the "class" keyword. 
@@ -144,42 +119,70 @@ while True:
                     else:
                         price = price_element.get_text()
                     price = price.strip() # Only price is kept, in case there were any spaces or newlines (unlikely, but if not from Amazon, we don't know for sure).
+                    log("Extracted price: %s. " % (price))
                 else: 
                     raise Exception("Price element with class \"%s\" not found in the web page. If the page you're fetching is not from Amazon, update PRICE_CLASS accordingly. " % (PRICE_CLASS))
-            except (Exception, BaseException, KeyboardInterrupt) as error:
-                log("Unable to extract price with Playwright: %s" % (error))
-                print("Could not extract the price from the web page even with Playwright. Make sure the URL is correct and that the price element class is correct. \n Details: %s" % (error))
-                sys.exit(1)
-            finally: 
-                # Close the browser even if everything succeeds, so it frees up RAM and CPU. 
-                browser.close()
-        # Because we're still here, everything went well, and we've the price as as string. 
-        # Clean the price, its appearance depends on the country it is being fetched from.
-        price = price.replace("€", "").replace("$", "").replace(" ", "").strip() # Remove symbols and spaces. Handles both American and European formats. 
-        if "," in price and (len(price) - price.rfind(",") <= 3):
-            # European format (e. g. 1.186,03 or 186,03). 
-            price = price.replace(".", "").replace(",", ".")
-        else:
-            # American format (e. g. 1,186.03 or 186.03). 
-            price = price.replace(",", "")
+            except (Exception, BaseException, KeyboardInterrupt) as error: 
+                log("Unable to extract price: %s" % (error))
+                print("Could not extract the price from the web page. Make sure the URL is correct. \n Details: %s\nDO NOT WORRY, the script is going to open Playwright and retry. " % (error))
+                # sys.exit(1)
+                # Try with Playwright now. 
+                log("Using Playwright to fetch the web page...")
+                page.goto(AMAZON_URL, wait_until="load")
+                # Wait for 10 seconds for the price to be here, else there's a timeout and we exit. 
+                page.wait_for_selector(f".{PRICE_CLASS}", timeout=10000)
+                content = page.content() # You may not know this returns the HTML updated (by JavaScript) of the web page, 
+                                        #  not the raw original HTML. 
+                # OK, let's try to extract the price out of the HTML. 
+                try: 
+                    soup = BeautifulSoup(content, "html.parser")
+                    price_element = soup.find(class_=PRICE_CLASS) # "class_" to avoid conflicts with the "class" keyword. 
+                    if price_element != None: 
+                        # Try to find the full price. 
+                        offscreen = price_element.find(class_=AMAZON_OFFSCREEN)
+                        if offscreen != None:
+                            price = offscreen.get_text()
+                        else:
+                            price = price_element.get_text()
+                        price = price.strip() # Only price is kept, in case there were any spaces or newlines (unlikely, but if not from Amazon, we don't know for sure).
+                    else: 
+                        raise Exception("Price element with class \"%s\" not found in the web page. If the page you're fetching is not from Amazon, update PRICE_CLASS accordingly. " % (PRICE_CLASS))
+                except (Exception, BaseException, KeyboardInterrupt) as error:
+                    log("Unable to extract price with Playwright: %s" % (error))
+                    print("Could not extract the price from the web page even with Playwright. Make sure the URL is correct and that the price element class is correct. \n Details: %s" % (error))
+                    sys.exit(1)
+                finally: 
+                    # Close the browser even if everything succeeds, so it frees up RAM and CPU. 
+                    browser.close()
+            # Because we're still here, everything went well, and we've the price as as string. 
+            # Clean the price, its appearance depends on the country it is being fetched from.
+            price = price.replace("€", "").replace("$", "").replace(" ", "").strip() # Remove symbols and spaces. Handles both American and European formats. 
+            if "," in price and (len(price) - price.rfind(",") <= 3):
+                # European format (e. g. 1.186,03 or 186,03). 
+                price = price.replace(".", "").replace(",", ".")
+            else:
+                # American format (e. g. 1,186.03 or 186.03). 
+                price = price.replace(",", "")
 
-        # Remove any trailing dot. 
-        if price.endswith("."):
-            price = price[:-1]
-        price = float(price) # No price comparison errors. 
-        if price >= MAX_PRICE: 
-            log("Price still above ceiling. ")
-            print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
-        elif price < MAX_PRICE: 
-            log("Price below ceiling! ")
-            print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
-            print("**** PRICE BELOW CEILING! ****")
-            print("An email and a notification have been sent to you with all the details. ")
-            notification.notify(
-                title="AMAZON PRICE BELOW CEILING! ",
-                message="The current price of the product is $%s (your ceiling is of $%s). Check your email for more details. " % (price, MAX_PRICE),
-                timeout=60, # So the user really sees it. 
-            )
-            send_mail(price)
-        # Wait for next update.
-        time.sleep(INTERVAL)
+            # Remove any trailing dot. 
+            if price.endswith("."):
+                price = price[:-1]
+            price = float(price) # No price comparison errors. 
+            if price >= MAX_PRICE: 
+                log("Price still above ceiling. ")
+                print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
+            elif price < MAX_PRICE: 
+                log("Price below ceiling! ")
+                print("Current price: %s. Ceiling: %s. " % (price, MAX_PRICE))
+                print("**** PRICE BELOW CEILING! ****")
+                print("An email and a notification have been sent to you with all the details. ")
+                notification.notify(
+                    title="AMAZON PRICE BELOW CEILING! ",
+                    message="The current price of the product is $%s (your ceiling is of $%s). Check your email for more details. " % (price, MAX_PRICE),
+                    timeout=60, # So the user really sees it. 
+                )
+                send_mail(price)
+            # Wait for next update.
+            time.sleep(INTERVAL)
+if __name__ == "__main__": 
+    get_prices()
