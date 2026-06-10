@@ -1,0 +1,117 @@
+<style>
+    body {
+        background-color: #181818; 
+        color: #ffffff;
+    }
+    h1 {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 24px; 
+    }
+    p {
+        font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif; 
+        font-size: 16px; 
+    }
+    .important {
+        display: inline-block; 
+        animation: grow_and_turn 2s infinite; 
+    }
+    @keyframes grow_and_turn {
+        0%% {
+            transform: scale(1) rotateZ(0deg);
+        }
+        35%% {
+            transform: scale(1.8) rotateZ(15deg) translateX(20%%) translateY(20%%);
+        }
+        45%% {
+            transform: scale(1.8) rotateZ(-15deg) translateX(20%%) translateY(20%%);
+        }
+        55%% {
+            transform: scale(1.8) rotateZ(15deg) translateX(20%%) translateY(20%%);
+        }
+        65%% {
+            transform: scale(1.8) rotateZ(-15deg) translateX(20%%) translateY(20%%);
+        }
+        75%% {
+            transform: scale(1.8) rotateZ(15deg) translateX(20%%) translateY(20%%);
+        }
+        85%% {
+            transform: scale(1.8) rotateZ(-15deg) translateX(20%%) translateY(20%%);
+        }
+        100%% {
+            transform: scale(1) rotateZ(0deg);
+        }
+    }
+    a {
+        transition: all 0.4s; 
+        background-color: #74dcff00; 
+        display: inline-block; 
+        opacity: 0.7; 
+        text-decoration: none;
+        color: #74dcff; 
+        transform: translateX(-26px);
+        font-family: Calibri, 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+        padding: 4px; 
+    }
+    a:before {
+        content: "→"; 
+        margin-right: 8px;
+        transform: translateX(26px); 
+        display: inline-block; 
+        opacity: 0; 
+        transition: all 0.8s; 
+    }
+    a:hover:before {
+        transform: translateX(0px); 
+        opacity: 1; 
+    }
+    a:hover {
+        transform: translateX(0px); 
+        opacity: 1; 
+        background-color: #0287b3; 
+        color: #ffffff; 
+        border-radius: 8px;
+    }
+    a:active {
+        background-color: #005875;
+        padding: 6px; 
+        border-radius: 20px;
+    }
+    a:after {
+        content: ""; 
+        top: calc(100%% - 4px); 
+        left: 0; 
+        position: absolute; 
+        display: block; 
+        background-color: #ffffff;
+        height: 4px; 
+        width: 0px; 
+        transition: 0.6s; 
+    }
+    a:hover:after {
+        width: 120%%; /* overflow: hidden; hides the overflowing part. */
+        animation: move_line 1s infinite;
+        animation-delay: 2s; /* Let the user click on the link before an animation, if the user is still there, then show it. */
+    }
+    a {
+        overflow: hidden; 
+    }
+    @keyframes move_line {
+        0%% {
+            left: 0;
+        }
+        35%% {
+            left: 100%%; 
+        }
+        65%% {
+            left: -100%%; 
+        }
+        100%% {
+            left: 0; 
+        }
+    }
+</style>
+<h1 style="text-decoration: underline;" class="important">The product price is below the ceiling!</h1>
+<p>Current price: <span style="color: #ff0000; ">$%s</span></p>
+<p>Ceiling: <span style="color: #80a534; ">$%s</span></p>
+<p >The current price is <span style="color: #8d47ce; ">$%s</span> under the ceiling. </p>
+<a href="%s">Go to the web site</a>
