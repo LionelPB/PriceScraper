@@ -3,6 +3,7 @@ Here's the GUI version of "main.py".
 It lets you search directly on Amazon to avoid having to get the right product URL. 
 """
 import glob
+from statistics import variance
 from tkinter import *
 from tkinter import ttk # Updated widgets. 
 from flask.cli import F
@@ -108,7 +109,10 @@ bright = colors[0:4]
 idx = -1
 hover_color = "#00542d"
 def hover(frame): 
-    frame.configure(bg=hover_color)
+    try: 
+        frame.configure(bg=hover_color)
+    except: 
+        pass
     for elem in frame.winfo_children(): 
         try: 
             elem.configure(bg=hover_color, cursor="hand2")
@@ -125,7 +129,10 @@ def leave(frame, orig=None):
         color, text_color = frame.original_color
     else: 
         color, text_color = orig
-    frame.configure(bg=color)
+    try: 
+        frame.configure(bg=color)
+    except: 
+        pass
     for elem in frame.winfo_children(): 
         try: 
             elem.configure(bg=color, cursor="")
@@ -156,6 +163,7 @@ def open_page(frame):
         track.configure(text="Remove from Tracklist")
     else:
         track.configure(text="Add this product to the Tracklist")
+    set_status("What do you want to do with this product? ")
 def track_untrack(result, btn): 
     if result in tracklist: 
         tracklist.remove(result)
@@ -166,14 +174,16 @@ def track_untrack(result, btn):
     update_tracklist()
 tracklist = [] # List of products user wants to track. 
 last_results = []
-def show_results(found): 
+def show_results(found, protected=None, callback=None): 
     global color
     global last_results
     global idx
-    last_results = found
+    if protected == None: # Normal search. 
+        last_results = found
     set_status("Search results: ")
     for elem in container.winfo_children(): 
-        elem.destroy()
+        if elem != protected: 
+            elem.destroy()
     for result in found: 
         idx = idx + 1
         try: 
@@ -213,6 +223,10 @@ def show_results(found):
         title_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
         icon_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
         price_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
+        if callback != None: 
+            callback_frame = Frame(text)
+            callback_frame.pack(fill=X)
+            callback(callback_frame, result)
     root.after(440, update_trim)
 def update_trim(evt=None): 
     """Adjusts trimming based on widget size. """
@@ -334,11 +348,55 @@ def clear():
     root.update()
 def open_tracklist(): 
     """Shows the current tracking items. """
+    for elem in container.winfo_children(): 
+        elem.destroy()
+    cont = Frame(container)
+    Label(cont, text="The Tracklist tracks the prices of the added products and notifies you when their price gets below a ceiling. ").pack()
+    buttons = Frame(cont)
+    buttons.pack(fill=X)
+    ttk.Button(buttons, text="< Show results from my last search", command=lambda: show_results(last_results)).pack(side="left")
+    ttk.Button(buttons, text="Logged prices >").pack(side="left")
+    te = ttk.Button(buttons, text="Track everything")
+    te.pack(side="left")
+    if tracklist == current: # Everything being tracked. 
+        te.configure(text="Stop tracking everything")
+    else: 
+        te.configure(text="Start tracking everything")
+    te.configure(command=lambda: track_all(te))
+    cont.pack(fill=X)
     if tracklist == []: # Empty!
         set_status("Your Tracklist is empty! \n Find for a product, click on it, \n add it to the Tracklist and come back here. ")
     else: 
-        show_results(tracklist)
+        show_results(tracklist, cont, choose_times)
         set_status("Contents of my Tracklist")
+def track_all(button): 
+    pass
+def choose_times(frame, result): 
+    Label(frame, text="Choose verification interval for this product: ", anchor="w").pack(fill=X)
+    frm = Frame(frame)
+    frm.pack(fill=X)
+    result["interval"] = IntVar(root, value=800)
+    Label(frm, text="Interval in seconds to wait between price checks: ").grid(row=0, column=0)
+    ttk.Spinbox(frm, from_=20, to=1000000, increment=5, textvariable=result["interval"]).grid(row=0, column=1) # Safe value: 20 seconds. Otherwise, it would be too much work for the computer to launch a browser every 20 seconds. 
+    b = ttk.Button(frame, text="Start tracking for this item")
+    b.configure(command=lambda: start_track(b, result))
+    b.pack(anchor="w")
+    if result in current: 
+        b.configure(text="Stop tracking")
+    else: 
+        b.configure(text="Start tracking")
+
+def start_track(btn, result): 
+    if result in current: 
+        current.remove(result)
+        btn.configure(text="This item is no longer tracked. Track it again")
+    else: 
+        current.append(result)
+        btn.configure(text="Currently tracked. Stop tracking")
+settings = {
+
+}
+current = []
 root = Tk()
 root.title("PriceScraper GUI")
 root.minsize(600, 400)
