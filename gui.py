@@ -12,6 +12,7 @@ import threading
 import io # To store previews in RAM
 import requests # To get previews 
 import PIL.Image, PIL.ImageTk # To show previews (default format in Amazon is JPEG). 
+import tkinter.font as tk_font # Adjust title trimming when window resizes. 
 
 BASE_URL = "https://www.amazon.es/"
 SEARCH_URL = BASE_URL + "s?k=" # This is the Amazon search URL. 
@@ -101,24 +102,49 @@ def show_results(found):
             idx = -1
             color = colors[idx]
         text_color = "#ffffff" if color in bright else "#000000"
-        title = trim(result["title"], 60)
         frame = Frame(container, bg=color)
         icon = Frame(frame, bg=color)
         text = Frame(frame, bg=color)
         icon.pack(side="left")
         text.pack(side="left", fill=X, expand=True)
-        Label(text, text=title, font=("Calibri", 16), bg=color, fg=text_color, anchor="w").pack(fill=X)
+        full_title = result["title"]
+        title = trim(full_title, 60)
+        title_label = Label(text, text=title, font=("Calibri", 16), bg=color, fg=text_color, anchor="w")
+        title_label.pack(fill=X)
+        title_label.full_title = full_title
         if not str(result["price"]).lower().startswith("not"):
-            Label(text, text="$" + str(result["price"]), bg=color, fg=text_color, anchor="w").pack(fill=X)
+            Label(text, text="$" + str(result["price"]), bg=color, fg=text_color, anchor="w", font=("Segoe UI", 11)).pack(fill=X) # ("Segoe UI", 9) is the default Windows font size. 
         else:
-            Label(text, text=str(result["price"]), bg=color, fg="#ff0000", anchor="w").pack(fill=X)
+            Label(text, text="Price: " + str(result["price"]), bg=color, fg="#ff0000", anchor="w", font=("Segoe UI", 11)).pack(fill=X) # ("Segoe UI", 9) is the default Windows font size. 
         icon_label = Label(icon, bg=color, fg=text_color)
         icon_label.pack()
         preview_thread = threading.Thread(target=preview_render, args=(result["image"], icon_label), daemon=True)
         preview_thread.start()
         frame.pack(fill=X, pady=1)
+    root.after(440, update_trim)
+def update_trim(evt=None): 
+    """Adjusts trimming based on widget size. """
+    f = tk_font.Font(family="Calibri", size=16)
+    for frame in container.winfo_children():
+        children = frame.winfo_children()
+        if len(children) < 2:
+            continue
+        text_frame = children[1]
+        labels = text_frame.winfo_children()
+        if not labels:
+            continue
+        title_label = labels[0]
+        full_title = getattr(title_label, "full_title", title_label.cget("text"))
+        free_pixels = text_frame.winfo_width()
+        if free_pixels <= 10: 
+            continue
+        avg_char_px = max(6, f.measure("n"))
+        max_chars = max(8, int(free_pixels / avg_char_px))
+        title_label.configure(text=trim(full_title, max_chars))
 def trim(string: str = "String to trim", chars: int = 13): 
-    """Trims a string. It avoids to overflow the label in which the text is. """
+    """Trims a string. It avoids to overflow the label in which the text is. 
+       If the string to trim's length is less that chars - 3, the string is returned as is. 
+    """
     if len(string) <= chars - 3: 
         return string # It fits, so no need to trim! 
     return string[0:chars-3] + "..." # -3 because len("...") is 3. 
@@ -174,6 +200,7 @@ def show_widgets():
         "<Configure>",
         lambda evt: scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
     )
+    canvas_frame.bind("<Configure>", update_trim, add="+")
     # Scrollbars to scroll through the frame. 
     v_scrollbar = ttk.Scrollbar(center, orient="vertical", command=scroll_canvas.yview)
     scroll_canvas.configure(yscrollcommand=v_scrollbar.set)
