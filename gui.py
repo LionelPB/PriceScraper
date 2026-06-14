@@ -5,6 +5,7 @@ It lets you search directly on Amazon to avoid having to get the right product U
 import glob
 from tkinter import *
 from tkinter import ttk # Updated widgets. 
+from flask.cli import F
 from playwright.sync_api import sync_playwright  # Manipulate the browser to search on Amazon for the user. 
 from bs4 import BeautifulSoup
 import threading
@@ -106,7 +107,7 @@ def show_error(error):
 colors = ["#000000", "#444444", "#333333", "#222222", "#ffffff", "#222222", "#333333", "#444444"]
 bright = colors[0:4]
 idx = -1
-hover_color = "#5dffb3"
+hover_color = "#00542d"
 def hover(frame): 
     frame.configure(bg=hover_color)
     for elem in frame.winfo_children(): 
@@ -115,7 +116,7 @@ def hover(frame):
         except: 
             pass
         try: 
-            elem.configure(fg="#000000")
+            elem.configure(fg="#ffffff")
         except: 
             pass
         hover(elem)
@@ -137,9 +138,38 @@ def leave(frame, orig=None):
             pass
         leave(elem, (color, text_color)) # The children might not have ".original_color". 
     root.after(0, root.update) # If we were ever called from a thread. 
+def open_page(frame): 
+    result = frame.result
+    for elem in container.winfo_children(): 
+        elem.destroy()
+    set_status("Please wait...")
+    contain = Frame(container)
+    contain.pack(expand=True, fill=BOTH)
+    Label(contain, text="Track this product", font=("Segoe UI", 16), anchor="w").pack(fill=X)
+    buttons = Frame(contain)
+    buttons.pack(fill=X)
+    ttk.Button(buttons, text="< Back to search results", command=lambda: show_results(last_results)).pack(side="left")
+    track = ttk.Button(buttons, text="Add this product to the tracklist")
+    track.configure(command=lambda r=result: track_untrack(r, track))
+    track.pack(side="left")
+    if result in tracklist: 
+        track.configure(text="Remove from tracklist")
+    else:
+        track.configure(text="Add this product to the tracklist")
+def track_untrack(result, btn): 
+    if result in tracklist: 
+        tracklist.remove(result)
+        btn.configure(text="Add this product to the tracklist")
+    else:
+        tracklist.append(result)
+        btn.configure(text="Remove from tracklist")
+tracklist = [] # List of products user wants to track. 
+last_results = []
 def show_results(found): 
     global color
+    global last_results
     global idx
+    last_results = found
     set_status("Search results: ")
     for elem in container.winfo_children(): 
         elem.destroy()
@@ -154,6 +184,7 @@ def show_results(found):
         frame = Frame(container, bg=color)
         frame.bind("<Enter>", lambda evt, frm=frame: hover(frm))
         frame.bind("<Leave>", lambda evt, frm=frame: leave(frm))
+        frame.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
         frame.result = result
         frame.original_color = (color, text_color)
         icon = Frame(frame, bg=color)
@@ -166,14 +197,21 @@ def show_results(found):
         title_label.pack(fill=X)
         title_label.full_title = full_title
         if not str(result["price"]).lower().startswith("not"):
-            Label(text, text="$" + str(result["price"]), bg=color, fg=text_color, anchor="w", font=("Segoe UI", 11)).pack(fill=X) # ("Segoe UI", 9) is the default Windows font size. 
+            price_label = Label(text, text="$" + str(result["price"]), bg=color, fg=text_color, anchor="w", font=("Segoe UI", 11)) # ("Segoe UI", 9) is the default Windows font size. 
+            price_label.pack(fill=X)
         else:
-            Label(text, text="Price: " + str(result["price"]), bg=color, fg="#ff0000", anchor="w", font=("Segoe UI", 11)).pack(fill=X) # ("Segoe UI", 9) is the default Windows font size. 
+            price_label = Label(text, text="Price: " + str(result["price"]), bg=color, fg="#ff0000", anchor="w", font=("Segoe UI", 11)) # ("Segoe UI", 9) is the default Windows font size. 
+            price_label.pack(fill=X)
         icon_label = Label(icon, bg=color, fg=text_color)
         icon_label.pack()
         preview_thread = threading.Thread(target=preview_render, args=(result["image"], icon_label), daemon=True)
         preview_thread.start()
         frame.pack(fill=X, pady=1)
+        icon.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
+        text.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
+        title_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
+        icon_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
+        price_label.bind("<Button-1>", lambda evt, frm=frame: open_page(frm))
     root.after(440, update_trim)
 def update_trim(evt=None): 
     """Adjusts trimming based on widget size. """
@@ -224,7 +262,10 @@ def preview_render(preview: str, target: Label):
         print("Could not fetch preview. %s" % (error))
 def set_image(image, target, url=None): 
     img_cache.append([image, url]) # The image and where we found it. 
-    target.configure(image=image)
+    try: 
+        target.configure(image=image)
+    except: 
+        pass # Last results may still be downloading, and user has clicked on a product, so everything got destroyed. 
     root.update()
 def show_widgets(): 
     """Adds widgets to the empty window. """
