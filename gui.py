@@ -84,31 +84,34 @@ def unblock_ui():
     goSearch.configure(state=NORMAL)
 def show_error(error): 
     set_status("There was an error while fetching result: \n%s" % (error))
-colors = ["#000000", "#444444", "#222222", "#ffffff", "#222222", "#444444", "#000000"]
-bright = colors[0:3]
-color = "#ffffff"
+colors = ["#000000", "#444444", "#333333", "#222222", "#ffffff", "#222222", "#333333", "#444444"]
+bright = colors[0:4]
+idx = -1
 def show_results(found): 
     global color
-    idx = colors.index(color)
-    idx = idx + 1
-    try: 
-        color = colors[idx]
-    except: 
-        idx = 0
-        color = colors[idx]
-    text_color = "#ffffff" if color in bright else "#000000"
+    global idx
     set_status("Search results: ")
     for elem in container.winfo_children(): 
         elem.destroy()
     for result in found: 
+        idx = idx + 1
+        try: 
+            color = colors[idx]
+        except: 
+            idx = -1
+            color = colors[idx]
+        text_color = "#ffffff" if color in bright else "#000000"
         title = trim(result["title"], 60)
         frame = Frame(container, bg=color)
         icon = Frame(frame, bg=color)
         text = Frame(frame, bg=color)
         icon.pack(side="left")
-        text.pack(side="right", fill=X)
-        Label(text, text=title, font=("Calibri", 16), bg=color, fg=text_color).pack()
-        Label(text, text="$" + str(result["price"]), bg=color, fg=text_color).pack()
+        text.pack(side="left", fill=X, expand=True)
+        Label(text, text=title, font=("Calibri", 16), bg=color, fg=text_color, anchor="w").pack(fill=X)
+        if not str(result["price"]).lower().startswith("not"):
+            Label(text, text="$" + str(result["price"]), bg=color, fg=text_color, anchor="w").pack(fill=X)
+        else:
+            Label(text, text=str(result["price"]), bg=color, fg="#ff0000", anchor="w").pack(fill=X)
         icon_label = Label(icon, bg=color, fg=text_color)
         icon_label.pack()
         preview_thread = threading.Thread(target=preview_render, args=(result["image"], icon_label), daemon=True)
@@ -151,7 +154,7 @@ def show_widgets():
     global goSearch
     global container
     global search_text
-    global scroll_canvas
+    global canvas_frame
     global text_status
     global text_statusLabel
     search = ttk.Entry(top, width=100)
