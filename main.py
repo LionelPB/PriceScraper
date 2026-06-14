@@ -11,16 +11,20 @@ import os # To get environment variables for Amazon URL and price ceiling.
 import sys # In case no URL is provided. 
 from playwright.sync_api import sync_playwright # To fetch the web page in case requests + bs4 were blocked. 
 
+from dotenv import load_dotenv # Temporary: Load API keys (and potentially set the Amazon URL and ceiling price)
+load_dotenv(".env")
+
 logs = []
 AMAZON_URL = ""
-EMAIL = "kosog20859@bncinema.com"
+EMAIL = "vinepe9152@hotkev.com"
 AMAZON_OFFSCREEN = "a-offscreen" # ONLY FOR AMAZON: It is unlikely that this will work on other sites. 
 HEADLESS = True # If there's a ReCAPTCHA, set this to False so you see the browser and solve it. If there are no ReCAPTCHAs, 
 # you can set it to True to avoid opening a browser window. 
 MAX_PRICE = 0.0
 INTERVAL = 800 # Seconds to wait between each check. 
 PRICE_CLASS = "a-price" # For non-Amazon web sites, extends compatibility by allowing to get prices from different elements. 
-AGENTMAIL_APIKEY = "am_us_ed192731a8db328a5bd870ddbdd029ddb0fe949f2eb863403d17c35fc8542067" # API key for AgentMail. 
+AGENTMAIL_APIKEY = "" # API key for AgentMail. Let it blank to load from environment variables. 
+
 
 with open("message_template.html", "r", encoding="utf-8") as template: 
     BODY_TEMPLATE = template.read()
@@ -30,6 +34,14 @@ def log(msg: str = "") -> None:
     logs.append(msg) # But do not print them unless the environment variable DEBUG is set to "true".
     if os.environ.get("DEBUG", "false").lower() == "true":
         print(msg)
+
+# Load AgentMail API key from environment if AGENTMAIL_APIKEY is empty.
+if not AGENTMAIL_APIKEY:
+    AGENTMAIL_APIKEY = os.environ.get("AGENTMAIL_APIKEY", None)
+    if AGENTMAIL_APIKEY == None: 
+        print("WARNING: There isn't any AgentMail API key defined. Email sending will fail. ")
+        log("No API key defined in variable or in environment variables. ")
+
 def send_mail(price: float) -> None:
     """Sends the email to the user. """    
     log("Sending email with price: $%d" % (price))
