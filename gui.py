@@ -8,6 +8,8 @@ from tkinter import ttk # Updated widgets.
 from playwright.sync_api import sync_playwright  # Manipulate the browser to search on Amazon for the user. 
 from bs4 import BeautifulSoup
 import threading
+import re # To detect JavaScript URLs
+from urllib.parse import urljoin # To correctly join URLs. 
 
 import io # To store previews in RAM
 import requests # To get previews 
@@ -47,7 +49,11 @@ def search_amazon(text, *args, **kwargs):
             tab = browser.new_page()
             loader_text("Searching...")
             set_status("This may take a few seconds...")
-            tab.goto(url, wait_until="load", timeout=40000)
+            tab.goto(url, wait_until="domcontentloaded", timeout=40000)
+            try: 
+                tab.wait_for_selector("div[data-component-type='s-search-result']", timeout=5000)
+            except: 
+                pass
             html = tab.content()
             browser.close() # We don't need it anymore. 
         # Get out of here to close the browser. 
@@ -65,8 +71,20 @@ def search_amazon(text, *args, **kwargs):
             price = price.get_text(strip=True) if price else "Not available"
             img = item.select_one('img.s-image')
             img = img['src'] if img and img.has_attr('src') else None
-            link = item.select_one('[data-cy="title-recipe"] a')
-            link = BASE_URL + link['href'] if link and link.has_attr('href') else None
+            # Try to extract ASIN for JavaScript URLs. 
+            anchor = item.select_one('[data-cy="title-recipe"] a[href]')
+            href = anchor['href'] if anchor and anchor.has_attr('href') else None
+            asin = item.get('data-asin')
+            if not asin and href:
+                m = re.search(r'/dp/([A-Z0-9]{10})|/gp/product/([A-Z0-9]{10})', href)
+                if m:
+                    asin = m.group(1) or m.group(2)
+            if asin:
+                link = urljoin(BASE_URL, f'/dp/{asin}')
+            elif href and not href.strip().lower().startswith('javascript:'):
+                link = urljoin(BASE_URL, href)
+            else:
+                link = None
             found.append({
                 "title": title, 
                 "price": price, 
@@ -88,6 +106,37 @@ def show_error(error):
 colors = ["#000000", "#444444", "#333333", "#222222", "#ffffff", "#222222", "#333333", "#444444"]
 bright = colors[0:4]
 idx = -1
+hover_color = "#5dffb3"
+def hover(frame): 
+    frame.configure(bg=hover_color)
+    for elem in frame.winfo_children(): 
+        try: 
+            elem.configure(bg=hover_color, cursor="hand2")
+        except: 
+            pass
+        try: 
+            elem.configure(fg="#000000")
+        except: 
+            pass
+        hover(elem)
+    root.after(0, root.update) # If we were ever called from a thread. 
+def leave(frame, orig=None): 
+    if orig == None: 
+        color, text_color = frame.original_color
+    else: 
+        color, text_color = orig
+    frame.configure(bg=color)
+    for elem in frame.winfo_children(): 
+        try: 
+            elem.configure(bg=color, cursor="")
+        except: 
+            pass
+        try: 
+            elem.configure(fg=text_color)
+        except: 
+            pass
+        leave(elem, (color, text_color)) # The children might not have ".original_color". 
+    root.after(0, root.update) # If we were ever called from a thread. 
 def show_results(found): 
     global color
     global idx
@@ -103,6 +152,10 @@ def show_results(found):
             color = colors[idx]
         text_color = "#ffffff" if color in bright else "#000000"
         frame = Frame(container, bg=color)
+        frame.bind("<Enter>", lambda evt, frm=frame: hover(frm))
+        frame.bind("<Leave>", lambda evt, frm=frame: leave(frm))
+        frame.result = result
+        frame.original_color = (color, text_color)
         icon = Frame(frame, bg=color)
         text = Frame(frame, bg=color)
         icon.pack(side="left")
