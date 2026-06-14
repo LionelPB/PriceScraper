@@ -60,7 +60,6 @@ def search_amazon(text, *args, **kwargs):
         # Get out of here to close the browser. 
         loader_text("Extracting data...")
         set_status("We're almost done...")
-        set_status("")
         soup = BeautifulSoup(html, "html.parser")
         items = soup.select('div[data-component-type="s-search-result"], div.s-result-item')
         for item in items: 
@@ -152,17 +151,19 @@ def open_page(frame):
     track = ttk.Button(buttons, text="Add this product to the tracklist")
     track.configure(command=lambda r=result: track_untrack(r, track))
     track.pack(side="left")
+    ttk.Button(buttons, text="Show my Tracklist", command=open_tracklist).pack(side="left")
     if result in tracklist: 
-        track.configure(text="Remove from tracklist")
+        track.configure(text="Remove from Tracklist")
     else:
-        track.configure(text="Add this product to the tracklist")
+        track.configure(text="Add this product to the Tracklist")
 def track_untrack(result, btn): 
     if result in tracklist: 
         tracklist.remove(result)
-        btn.configure(text="Add this product to the tracklist")
+        btn.configure(text="Add this product to the Tracklist")
     else:
         tracklist.append(result)
-        btn.configure(text="Remove from tracklist")
+        btn.configure(text="Added! Remove from Tracklist")
+    update_tracklist()
 tracklist = [] # List of products user wants to track. 
 last_results = []
 def show_results(found): 
@@ -267,6 +268,12 @@ def set_image(image, target, url=None):
     except: 
         pass # Last results may still be downloading, and user has clicked on a product, so everything got destroyed. 
     root.update()
+def update_tracklist(): 
+    elems = len(tracklist)
+    add = "s"
+    if elems == 1: 
+        add = ""
+    tracklist_counter.set("%s element%s in the Tracklist" % (elems, add))
 def show_widgets(): 
     """Adds widgets to the empty window. """
     global search
@@ -276,12 +283,24 @@ def show_widgets():
     global search_text
     global canvas_frame
     global text_status
+    global tracklist_frame
+    global tracklist_label
+    global tracklist_counter
     global text_statusLabel
     search = ttk.Entry(top, width=100)
-    search.grid(row=0, column=0)
+    search.grid(row=0, column=0, sticky="ew")
     search_text = StringVar(root, value="Search")
     goSearch = ttk.Button(top, textvariable=search_text, command=search_products)
-    goSearch.grid(row=0, column=1)
+    goSearch.grid(row=0, column=1, sticky="e")
+    tracklist_frame = Frame(top)
+    tracklist_counter = StringVar(root, value="Please wait...")
+    tracklist_label = Label(tracklist_frame, cursor="hand2", bg="#ffffff", textvariable=tracklist_counter, font=("Segoe UI", 11), anchor="e")
+    tracklist_label.pack(expand=True, fill=BOTH)
+    tracklist_label.bind("<Enter>", lambda evt: (tracklist_label.configure(bg="#000000", fg="#ffffff"), tracklist_counter.set("               See my Tracklist")))
+    tracklist_label.bind("<Leave>", lambda evt: (tracklist_label.configure(bg="#ffffff", fg="#000000"), update_tracklist()))
+    tracklist_label.bind("<Button-1>", lambda evt: open_tracklist())
+    tracklist_frame.grid(row=0, column=2, sticky="e")
+    top.grid_columnconfigure(0, weight=1)
     scroll_canvas = Canvas(center, highlightthickness=0)
     scroll_canvas.pack(expand=True, fill=BOTH)
     canvas_frame = Frame(scroll_canvas)
@@ -305,6 +324,7 @@ def show_widgets():
     text_statusLabel.pack(expand=True, fill=BOTH)
     container = Frame(canvas_frame)
     container.pack(expand=True, fill=BOTH)
+    update_tracklist()
 def set_status(status): 
     text_status.set(status)
 def clear(): 
@@ -312,6 +332,13 @@ def clear():
     for elem in canvas_frame.winfo_children(): 
         elem.destroy()
     root.update()
+def open_tracklist(): 
+    """Shows the current tracking items. """
+    if tracklist == []: # Empty!
+        set_status("Your Tracklist is empty! \n Find for a product, click on it, \n add it to the Tracklist and come back here. ")
+    else: 
+        show_results(tracklist)
+        set_status("Contents of my Tracklist")
 root = Tk()
 root.title("PriceScraper GUI")
 root.minsize(600, 400)
