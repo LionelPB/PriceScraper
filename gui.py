@@ -12,15 +12,40 @@ from bs4 import BeautifulSoup
 import threading
 import re # To detect JavaScript URLs
 from urllib.parse import urljoin # To correctly join URLs. 
+import customtkinter as ctk
 
 import io # To store previews in RAM
 import requests # To get previews 
 import PIL.Image, PIL.ImageTk # To show previews (default format in Amazon is JPEG). 
 import tkinter.font as tk_font # Adjust title trimming when window resizes. 
+import marshal
+import os
 
 BASE_URL = "https://www.amazon.es/"
 SEARCH_URL = BASE_URL + "s?k=" # This is the Amazon search URL. 
 HEADLESS = False # Set this to "False" to see the browser, if it is in "True", then the browser window won't be visible. 
+SETTINGS = {}
+CACHE_DIR = "%s/PriceScraper_GUI" % (os.environ.get("temp", "C:/Users/defautuser0/AppData/Local/Temp"))
+SETTINGS_FILE = CACHE_DIR + "/PriceScraper_settings.mrshl"
+os.makedirs(CACHE_DIR, exist_ok=True) # Don't worry if it already exists. 
+
+def log(text: str = ""): 
+    """Changes the status bar to the given message. """
+    status_bar.set(text)
+    root.update()
+def load_settings(): 
+    global SETTINGS
+    try: 
+        with open(SETTINGS_FILE, "rb") as settings: 
+            SETTINGS = marshal.load(settings)
+    except (Exception, BaseException) as error: 
+        log("There was an error loading settings: %s" % (error))
+def save_settings():
+    try: 
+        with open(SETTINGS_FILE, "wb") as settings: 
+            marshal.dump(SETTINGS, settings)
+    except (Exception, BaseException) as error: 
+        log("Unable to save settings: " % (error))
 
 def search_products(): 
     """Finds products on Amazon by using Playwright. """
@@ -37,32 +62,40 @@ def search_products():
 def loader_text(newText: str): 
     search_text.set(newText)
 def search_amazon(text, *args, **kwargs): 
-    """Headlessy opens a browser, and searches Amazon"""
+    """Headlessy opens a browser, and searches Amazon. """
     loader_text("Starting browser...")
     set_status("Preparing to search...")
     url = SEARCH_URL + text
     found = [] # What we got back. 
 
     try: 
+        log("Launching browser...")
         with sync_playwright() as p: 
             browser = p.chromium.launch(headless=HEADLESS, channel="chrome")
+            log("Opening new tab...")
             loader_text("Opening tab...")
-            set_status("This may take a few seconds...")
+            set_status("Opening tab...")
             tab = browser.new_page()
             loader_text("Searching...")
             set_status("This may take a few seconds...")
+            log("Loading URL...")
             tab.goto(url, wait_until="domcontentloaded", timeout=40000)
+            log("Waiting for search results...")
             try: 
                 tab.wait_for_selector("div[data-component-type='s-search-result']", timeout=5000)
             except: 
                 pass
+            log("Reading content...")
             html = tab.content()
+            log("Closing browser...")
             browser.close() # We don't need it anymore. 
         # Get out of here to close the browser. 
         loader_text("Extracting data...")
+        log("Parsing results...")
         set_status("We're almost done...")
         soup = BeautifulSoup(html, "html.parser")
         items = soup.select('div[data-component-type="s-search-result"], div.s-result-item')
+        done = 0
         for item in items: 
             title = item.select_one('[data-cy="title-recipe"] h2 span') # Extract title
             if title == None: 
@@ -92,9 +125,12 @@ def search_amazon(text, *args, **kwargs):
                 "image": img, 
                 "link": link,
             })
+            done = done + 1
+            log("Parsed %s out of %s (%s) results..." % (done, len(items), (done / len(items)) * 100))
     except (Exception, BaseException, KeyboardInterrupt) as error: 
         root.after(0, lambda: show_error(error))
     else: 
+        log("Displaying results...")
         root.after(0, lambda: show_results(found))
     finally: 
         loader_text("Search")
@@ -184,6 +220,7 @@ def show_results(found, protected=None, callback=None):
     for elem in container.winfo_children(): 
         if elem != protected: 
             elem.destroy()
+    done = 0
     for result in found: 
         idx = idx + 1
         try: 
@@ -227,6 +264,9 @@ def show_results(found, protected=None, callback=None):
             callback_frame = Frame(text)
             callback_frame.pack(fill=X)
             callback(callback_frame, result)
+            leave(frame)
+        done = done + 1
+        log("Displayed %s out of %s (%s) results..." % (done, len(found), (done / len(found)) * 100))
     root.after(440, update_trim)
 def update_trim(evt=None): 
     """Adjusts trimming based on widget size. """
@@ -248,7 +288,8 @@ def update_trim(evt=None):
         max_chars = max(8, int(free_pixels / avg_char_px))
         title_label.configure(text=trim(full_title, max_chars))
 def trim(string: str = "String to trim", chars: int = 13): 
-    """Trims a string. It avoids to overflow the label in which the text is. 
+    """
+       Trims a string. It avoids to overflow the label in which the text is. 
        If the string to trim's length is less that chars - 3, the string is returned as is. 
     """
     if len(string) <= chars - 3: 
@@ -257,8 +298,10 @@ def trim(string: str = "String to trim", chars: int = 13):
 img_cache = []
 def preview_render(preview: str, target: Label): 
     """Downloads a JPEG preview onto RAM and shows it in the label. """
+    log("Queued for download: \"%s\"..." % (preview))
     for possible_img in img_cache: 
         if possible_img[-1] == preview: # We already have it! 
+            log("Preview was cached.")
             root.after(0, lambda: set_image(possible_img[0], target, preview))
             return
     # Because we're here, the image isn't cached. 
@@ -272,6 +315,7 @@ def preview_render(preview: str, target: Label):
             tk_img = PIL.ImageTk.PhotoImage(master=root, image=img)
             root.after(0, lambda: set_image(tk_img, target, preview))
         else: 
+            log("Preview download failed, status code: %s. " % (req.status_code))
             raise Exception("The preview file was not found: %s. " % (req.status_code))
     except (BaseException, Exception, KeyboardInterrupt) as error: 
         print("Could not fetch preview. %s" % (error))
@@ -301,6 +345,8 @@ def show_widgets():
     global tracklist_label
     global tracklist_counter
     global text_statusLabel
+    global status_bar
+    global status_label
     search = ttk.Entry(top, width=100)
     search.grid(row=0, column=0, sticky="ew")
     search_text = StringVar(root, value="Search")
@@ -319,6 +365,7 @@ def show_widgets():
     scroll_canvas.pack(expand=True, fill=BOTH)
     canvas_frame = Frame(scroll_canvas)
     scroll_canvas.create_window(0, 0, window=canvas_frame, anchor="nw", tags="inner_window")
+    # Update width and text trimming on resize. 
     scroll_canvas.bind(
         "<Configure>", 
         lambda evt: scroll_canvas.itemconfigure("inner_window", width=evt.width)
@@ -338,6 +385,9 @@ def show_widgets():
     text_statusLabel.pack(expand=True, fill=BOTH)
     container = Frame(canvas_frame)
     container.pack(expand=True, fill=BOTH)
+    status_bar = StringVar(root, value="Search for products with the search bar. ")
+    status_label = Label(bottom, anchor="w", textvariable=status_bar)
+    status_label.pack(side=LEFT, fill=X)
     update_tracklist()
 def set_status(status): 
     text_status.set(status)
@@ -360,6 +410,13 @@ def open_tracklist():
     te.pack(side="left")
     if tracklist == current: # Everything being tracked. 
         te.configure(text="Stop tracking everything")
+    elif len(current) >= 1 and len(current) < len(tracklist): 
+        # Calculate percentage of tracked items as an integer. Guard against division by zero.
+        if len(tracklist) == 0:
+            percent = 0
+        else:
+            percent = int(len(current) * 100 / len(tracklist))
+        te.configure(text="%s/%s (%s%%) being tracked. Track everything" % (len(current), len(tracklist), percent))
     else: 
         te.configure(text="Start tracking everything")
     te.configure(command=lambda: track_all(te))
@@ -370,14 +427,24 @@ def open_tracklist():
         show_results(tracklist, cont, choose_times)
         set_status("Contents of my Tracklist")
 def track_all(button): 
-    pass
+    if tracklist == current: # Everything being tracked. 
+        for item in tracklist: 
+            start_track(button, item)
+    else: 
+        for item in tracklist: 
+            if item not in current: 
+                start_track(button, item)
+    open_tracklist()
 def choose_times(frame, result): 
     Label(frame, text="Choose verification interval for this product: ", anchor="w").pack(fill=X)
     frm = Frame(frame)
     frm.pack(fill=X)
     result["interval"] = IntVar(root, value=800)
     Label(frm, text="Interval in seconds to wait between price checks: ").grid(row=0, column=0)
-    ttk.Spinbox(frm, from_=20, to=1000000, increment=5, textvariable=result["interval"]).grid(row=0, column=1) # Safe value: 20 seconds. Otherwise, it would be too much work for the computer to launch a browser every 20 seconds. 
+    state = NORMAL
+    if result in current: 
+        state = DISABLED # Running, so no modification allowed. 
+    ttk.Spinbox(frm, state=state, from_=20, to=1000000, increment=5, textvariable=result["interval"]).grid(row=0, column=1) # Safe value: 20 seconds. Otherwise, it would be too much work for the computer to launch a browser every 20 seconds. 
     b = ttk.Button(frame, text="Start tracking for this item")
     b.configure(command=lambda: start_track(b, result))
     b.pack(anchor="w")
@@ -393,9 +460,7 @@ def start_track(btn, result):
     else: 
         current.append(result)
         btn.configure(text="Currently tracked. Stop tracking")
-settings = {
-
-}
+    open_tracklist()
 current = []
 root = Tk()
 root.title("PriceScraper GUI")
@@ -407,4 +472,5 @@ center.pack(expand=True, fill=BOTH)
 bottom = Frame(root)
 bottom.pack(fill=X)
 show_widgets()
+load_settings()
 root.mainloop()
